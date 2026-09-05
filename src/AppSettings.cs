@@ -24,6 +24,18 @@ public class Hotkey
     public bool IsEmpty => KeyCodes.Count == 0 && MouseButtonMask == 0;
 }
 
+/// <summary>
+/// A learned mishearing: when the transcript contains Heard, replace it with
+/// Replacement. Matching is case-insensitive and tolerant of spaces/hyphens
+/// and number words vs digits ("11 labs" == "eleven labs").
+/// </summary>
+public class Correction
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Heard { get; set; } = "";
+    public string Replacement { get; set; } = "";
+}
+
 public enum HotkeyBehavior
 {
     PushToTalk,
@@ -87,11 +99,12 @@ public class AppSettings
     public int MicDeviceNumber { get; set; } = -1;
 
     public List<string> Vocabulary { get; set; } = DefaultVocabulary();
+    public List<Correction> Corrections { get; set; } = new();
 
     public static List<string> DefaultVocabulary() => new()
     {
         "Stefan Oswald", "The Magic Mansion", "MagicTrickGuy", "Oscorp",
-        "Energy for Energy", "Fable 5", "Hermes", "OpenClaw", "Codex",
+        "Energy for Energy", "Fable 5", "ElevenLabs", "Hermes", "OpenClaw", "Codex",
         "Top Hat", "Lygia", "Whispy",
         "sleight of hand", "misdirection", "double lift", "palming",
         "close-up magic", "mentalism", "card force", "French drop"

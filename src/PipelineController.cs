@@ -49,6 +49,54 @@ public sealed class PipelineController
         });
     }
 
+    /// <summary>Vocabulary list handed to Whisper as a spelling prompt.</summary>
+    private string VocabularyPrompt
+    {
+        get
+        {
+            var terms = _settings.Vocabulary.Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+            return terms.Count == 0 ? "" : "Vocabulary: " + string.Join(", ", terms) + ".";
+        }
+    }
+
+    private Task<string> TranscribeAsync(float[] samples)
+    {
+        _whisper.VocabularyPrompt = VocabularyPrompt;
+        return _whisper.TranscribeAsync(samples, _settings.WhisperModel, _settings.Language);
+    }
+
+    // ---- calibration (driven by CalibrationForm) --------------------------------
+
+    public void BeginCalibrationRecording()
+    {
+        if (State != PipelineState.Idle)
+            throw new InvalidOperationException("Whispy is busy — try again in a moment.");
+        if (!WhisperEngine.IsModelDownloaded(_settings.WhisperModel))
+            throw new InvalidOperationException("Whisper model not downloaded — see Settings > Transcription.");
+        _recorder.Start(_settings.MicDeviceNumber);
+        SetState(PipelineState.Recording);
+    }
+
+    public float[] EndCalibrationRecording()
+    {
+        var samples = _recorder.Stop();
+        SetState(PipelineState.Processing);
+        return samples;
+    }
+
+    /// <summary>Raw engine transcript (no cleanup) — calibration needs the engine's actual mistakes.</summary>
+    public async Task<string> TranscribeRawAsync(float[] samples)
+    {
+        try
+        {
+            return await TranscribeAsync(samples);
+        }
+        finally
+        {
+            SetState(PipelineState.Idle);
+        }
+    }
+
     public void HotkeyDown()
     {
         if (_settings.HotkeyBehavior == HotkeyBehavior.Toggle)
@@ -128,7 +176,7 @@ public sealed class PipelineController
             string raw;
             try
             {
-                raw = await _whisper.TranscribeAsync(samples, _settings.WhisperModel, _settings.Language);
+                raw = await TranscribeAsync(samples);
             }
             catch (Exception ex)
             {

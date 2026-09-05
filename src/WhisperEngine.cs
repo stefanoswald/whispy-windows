@@ -79,14 +79,23 @@ public sealed class WhisperEngine : IDisposable
         _loadedModel = modelName;
     }
 
+    /// <summary>Vocabulary priming: Whisper conditions on a text prompt, so
+    /// listing the user's terms biases it toward their spellings
+    /// ("ElevenLabs" instead of "11 Labs").</summary>
+    public string VocabularyPrompt { get; set; } = "";
+
     public async Task<string> TranscribeAsync(float[] samples, string modelName, string language)
     {
         EnsureLoaded(modelName);
         if (_factory == null) throw new InvalidOperationException("Whisper model not loaded.");
 
-        await using var processor = _factory.CreateBuilder()
-            .WithLanguage(string.IsNullOrWhiteSpace(language) ? "en" : language)
-            .Build();
+        var builder = _factory.CreateBuilder()
+            .WithLanguage(string.IsNullOrWhiteSpace(language) ? "en" : language);
+        if (!string.IsNullOrWhiteSpace(VocabularyPrompt))
+        {
+            builder = builder.WithPrompt(VocabularyPrompt);
+        }
+        await using var processor = builder.Build();
 
         var pieces = new List<string>();
         await foreach (var segment in processor.ProcessAsync(samples))

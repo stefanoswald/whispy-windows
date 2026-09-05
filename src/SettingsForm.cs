@@ -6,17 +6,19 @@ public sealed class SettingsForm : Form
     private readonly AppSettings _settings;
     private readonly HotkeyManager _hotkeys;
     private readonly HistoryStore _history;
+    private readonly PipelineController _pipeline;
     private readonly Action _applyLaunchAtLogin;
 
     private Label _hotkeyLabel = null!;
     private Button _hotkeyButton = null!;
 
     public SettingsForm(AppSettings settings, HotkeyManager hotkeys,
-        HistoryStore history, Action applyLaunchAtLogin)
+        HistoryStore history, PipelineController pipeline, Action applyLaunchAtLogin)
     {
         _settings = settings;
         _hotkeys = hotkeys;
         _history = history;
+        _pipeline = pipeline;
         _applyLaunchAtLogin = applyLaunchAtLogin;
 
         Text = "Whispy Settings";
@@ -259,14 +261,15 @@ public sealed class SettingsForm : Form
         var page = new TabPage("Vocabulary");
 
         var note = MakeLabel(
-            "Words and phrases Whispy should spell exactly — names, brands, technical terms.", 16, 12);
-        note.Size = new Size(520, 20);
+            "Words Whispy should spell exactly — names, brands, technical terms. Number words match digits (\"ElevenLabs\" catches \"11 labs\").", 16, 10);
+        note.Size = new Size(520, 32);
         page.Controls.Add(note);
 
-        var input = new TextBox { Location = new Point(16, 40), Width = 330 };
-        var add = new Button { Text = "Add", Location = new Point(356, 38), Size = new Size(70, 26) };
-        var remove = new Button { Text = "Remove", Location = new Point(436, 38), Size = new Size(84, 26) };
-        var list = new ListBox { Location = new Point(16, 76), Size = new Size(504, 300) };
+        var input = new TextBox { Location = new Point(16, 46), Width = 230 };
+        var add = new Button { Text = "Add", Location = new Point(254, 44), Size = new Size(60, 26) };
+        var remove = new Button { Text = "Remove", Location = new Point(320, 44), Size = new Size(74, 26) };
+        var calibrate = new Button { Text = "Calibrate my voice…", Location = new Point(400, 44), Size = new Size(120, 26) };
+        var list = new ListBox { Location = new Point(16, 78), Size = new Size(504, 130) };
 
         void Refresh()
         {
@@ -296,12 +299,74 @@ public sealed class SettingsForm : Form
                 Refresh();
             }
         };
+        calibrate.Click += (_, _) =>
+        {
+            using var form = new CalibrationForm(_settings, _pipeline);
+            form.ShowDialog(this);
+            RefreshCorrections();
+        };
+
+        // Corrections: heard -> meant.
+        var corrNote = MakeLabel(
+            "Corrections — what Whispy hears → what you meant. Calibration fills this in; you can add your own.", 16, 218);
+        corrNote.Size = new Size(520, 20);
+        var heard = new TextBox { Location = new Point(16, 242), Width = 200, PlaceholderText = "Heard as… (11 labs)" };
+        var arrow = MakeLabel("→", 222, 246);
+        var meant = new TextBox { Location = new Point(242, 242), Width = 200, PlaceholderText = "Meant… (ElevenLabs)" };
+        var addCorr = new Button { Text = "Add", Location = new Point(450, 240), Size = new Size(70, 26) };
+        var corrList = new ListBox { Location = new Point(16, 274), Size = new Size(420, 120) };
+        var removeCorr = new Button { Text = "Remove", Location = new Point(446, 274), Size = new Size(74, 26) };
+
+        void AddCorrection()
+        {
+            var h = heard.Text.Trim();
+            var m = meant.Text.Trim();
+            if (h.Length == 0 || m.Length == 0) return;
+            _settings.Corrections.Add(new Correction { Heard = h, Replacement = m });
+            _settings.Save();
+            heard.Text = "";
+            meant.Text = "";
+            RefreshCorrections();
+        }
+        addCorr.Click += (_, _) => AddCorrection();
+        meant.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { AddCorrection(); e.SuppressKeyPress = true; } };
+        removeCorr.Click += (_, _) =>
+        {
+            if (corrList.SelectedIndex >= 0 && corrList.SelectedIndex < _settings.Corrections.Count)
+            {
+                _settings.Corrections.RemoveAt(corrList.SelectedIndex);
+                _settings.Save();
+                RefreshCorrections();
+            }
+        };
+        _correctionsList = corrList;
+        RefreshCorrections();
 
         page.Controls.Add(input);
         page.Controls.Add(add);
         page.Controls.Add(remove);
+        page.Controls.Add(calibrate);
         page.Controls.Add(list);
+        page.Controls.Add(corrNote);
+        page.Controls.Add(heard);
+        page.Controls.Add(arrow);
+        page.Controls.Add(meant);
+        page.Controls.Add(addCorr);
+        page.Controls.Add(corrList);
+        page.Controls.Add(removeCorr);
         return page;
+    }
+
+    private ListBox? _correctionsList;
+
+    private void RefreshCorrections()
+    {
+        if (_correctionsList == null) return;
+        _correctionsList.Items.Clear();
+        foreach (var c in _settings.Corrections)
+        {
+            _correctionsList.Items.Add($"{c.Heard}  →  {c.Replacement}");
+        }
     }
 
     // ---- History ----------------------------------------------------------------------

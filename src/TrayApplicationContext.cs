@@ -142,7 +142,7 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         if (_settingsForm == null || _settingsForm.IsDisposed)
         {
-            _settingsForm = new SettingsForm(_settings, _hotkeys, _history, ApplyLaunchAtLogin);
+            _settingsForm = new SettingsForm(_settings, _hotkeys, _history, _pipeline, ApplyLaunchAtLogin);
         }
         _settingsForm.Show();
         _settingsForm.Activate();
